@@ -26,6 +26,13 @@
 #define ROTATE1 105	// 'i'
 #define ROTATE2 73	// 'I'
 
+/* 블록 고정, 블록 삭제, 블록 생성, 게임 종료 */
+#define DROP1 97  // 'a'
+#define DROP2 65  // 'A'
+#define QUIT1 112 // 'p'
+#define QUIT2 80  // 'P'
+
+
 
 /* 블록 모양 */
 #define I_BLOCK 0
@@ -75,55 +82,145 @@ char i_block[4][4][4] = {
 
 char t_block[4][4][4] =
 	{
-			{{1, 0, 0, 0},   {1, 1, 0, 0},   {1, 0, 0, 0},   {0, 0, 0, 0}},
-			{{1, 1, 1, 0},   {0, 1, 0, 0},   {0, 0, 0, 0},   {0, 0, 0, 0}},
-			{{0, 0, 1, 0},   {0, 1, 1, 0},   {0, 0, 1, 0},   {0, 0, 0, 0}},
-			{{0, 0, 0, 0},   {0, 1, 0, 0},   {1, 1, 1, 0},   {0, 0, 0, 0}}
+			{{1, 0, 0, 0},   
+            {1, 1, 0, 0},   
+            {1, 0, 0, 0},   
+            {0, 0, 0, 0}},
+
+			{{1, 1, 1, 0},   
+            {0, 1, 0, 0},   
+            {0, 0, 0, 0},   
+            {0, 0, 0, 0}},
+
+			{{0, 1, 0, 0},   
+            {1, 1, 0, 0},   
+            {0, 1, 0, 0},   
+            {0, 0, 0, 0}},
+
+			{{0, 1, 0, 0},   
+            {1, 1, 1, 0},   
+            {0, 0, 0, 0},   
+            {0, 0, 0, 0}}
 	};
 
 
 char s_block[4][4][4] =
 	{
-			{{1, 0, 0, 0},   {1, 1, 0, 0},   {0, 1, 0, 0},   {0, 0, 0, 0}},
-			{{0, 1, 1, 0},   {1, 1, 0, 0},   {0, 0, 0, 0},   {0, 0, 0, 0}},
-			{{0, 1, 0, 0},   {0, 1, 1, 0},   {0, 0, 1, 0},   {0, 0, 0, 0}},
-			{{0, 0, 0, 0},   {0, 1, 1, 0},   {1, 1, 0, 0},   {0, 0, 0, 0}}
+			{{1, 0, 0, 0},   
+            {1, 1, 0, 0},   
+            {0, 1, 0, 0},   
+            {0, 0, 0, 0}},
+
+			{{0, 1, 1, 0},   
+            {1, 1, 0, 0},   
+            {0, 0, 0, 0},   
+            {0, 0, 0, 0}},
+
+			{{1, 0, 0, 0},   
+            {1, 1, 0, 0},   
+            {0, 1, 0, 0},   
+            {0, 0, 0, 0}},
+
+			{{0, 1, 1, 0},   
+            {1, 1, 0, 0},   
+            {0, 0, 0, 0},   
+            {0, 0, 0, 0}}
 
 	};
 
 char z_block[4][4][4] =
 	{
-			{{0, 1, 0, 0},   {1, 1, 0, 0},   {1, 0, 0, 0},   {0, 0, 0, 0}},
-			{{1, 1, 0, 0},   {0, 1, 1, 0},   {0, 0, 0, 0},   {0, 0, 0, 0}},
-			{{0, 0, 1, 0},   {0, 1, 1, 0},   {0, 1, 0, 0},   {0, 0, 0, 0}},
-			{{0, 0, 0, 0},   {1, 1, 0, 0},   {0, 1, 1, 0},   {0, 0, 0, 0}}
+			{{0, 1, 0, 0},   
+            {1, 1, 0, 0},   
+            {1, 0, 0, 0},   
+            {0, 0, 0, 0}},
+
+			{{1, 1, 0, 0},   
+            {0, 1, 1, 0},   
+            {0, 0, 0, 0},   
+            {0, 0, 0, 0}},
+
+			{{0, 1, 0, 0},   
+            {1, 1, 0, 0},   
+            {1, 0, 0, 0},   
+            {0, 0, 0, 0}},
+
+			{{1, 1, 0, 0},   
+            {0, 1, 1, 0},   
+            {0, 0, 0, 0},   
+            {0, 0, 0, 0}}
 
 	};
 
 char l_block[4][4][4] =
 	{
-			{{1, 0, 0, 0},   {1, 0, 0, 0},   {1, 1, 0, 0},   {0, 0, 0, 0}},
-			{{1, 1, 1, 0},   {1, 0, 0, 0},   {0, 0, 0, 0},   {0, 0, 0, 0}},
-			{{0, 1, 1, 0},   {0, 0, 1, 0},   {0, 0, 1, 0},   {0, 0, 0, 0}},
-			{{0, 0, 0, 0},   {0, 0, 1, 0},   {1, 1, 1, 0},   {0, 0, 0, 0}}
+			{{1, 0, 0, 0},   
+            {1, 0, 0, 0},   
+            {1, 1, 0, 0},   
+            {0, 0, 0, 0}},
+
+			{{1, 1, 1, 0},   
+            {1, 0, 0, 0},   
+            {0, 0, 0, 0},   
+            {0, 0, 0, 0}},
+
+			{{1, 1, 0, 0},   
+            {0, 1, 0, 0},   
+            {0, 1, 0, 0},   
+            {0, 0, 0, 0}},
+
+			{{0, 0, 1, 0},   
+            {1, 1, 1, 0},   
+            {0, 0, 0, 0},   
+            {0, 0, 0, 0}}
 
 	};
 
 char j_block[4][4][4] =
 	{
-			{{0, 1, 0, 0},   {0, 1, 0, 0},   {1, 1, 0, 0},   {0, 0, 0, 0}},
-			{{1, 0, 0, 0},   {1, 1, 1, 0},   {0, 0, 0, 0},   {0, 0, 0, 0}},
-			{{1, 1, 0, 0},   {1, 0, 0, 0},   {1, 0, 0, 0},   {0, 0, 0, 0}},
-			{{0, 0, 0, 0},   {0, 0, 1, 0},   {1, 1, 1, 0},   {0, 0, 0, 0}}
+			{{0, 1, 0, 0},   
+            {0, 1, 0, 0},   
+            {1, 1, 0, 0},   
+            {0, 0, 0, 0}},
+
+			{{1, 0, 0, 0},   
+            {1, 1, 1, 0},   
+            {0, 0, 0, 0},   
+            {0, 0, 0, 0}},
+
+			{{1, 1, 0, 0},   
+            {1, 0, 0, 0},   
+            {1, 0, 0, 0},   
+            {0, 0, 0, 0}},
+
+			{{0, 0, 1, 0},   
+            {1, 1, 1, 0},   
+            {0, 0, 0, 0},   
+            {0, 0, 0, 0}}
 	};
 
 
 char o_block[4][4][4] =
 	{
-			{{1, 1, 0, 0},   {1, 1, 0, 0},   {0, 0, 0, 0},   {0, 0, 0, 0}},
-			{{1, 1, 1, 0},   {1, 1, 0, 0},   {0, 0, 0, 0},   {0, 0, 0, 0}},
-			{{1, 1, 0, 0},   {1, 1, 0, 0},   {0, 0, 0, 0},   {0, 0, 0, 0}},
-			{{1, 1, 0, 0},   {1, 1, 0, 0},   {0, 0, 0, 0},   {0, 0, 0, 0}}
+			{{1, 1, 0, 0},   
+            {1, 1, 0, 0},   
+            {0, 0, 0, 0},   
+            {0, 0, 0, 0}},
+
+			{{1, 1, 0, 0},   
+            {1, 1, 0, 0},   
+            {0, 0, 0, 0},   
+            {0, 0, 0, 0}},
+
+			{{1, 1, 0, 0},   
+            {1, 1, 0, 0},   
+            {0, 0, 0, 0},   
+            {0, 0, 0, 0}},
+
+			{{1, 1, 0, 0},   
+            {1, 1, 0, 0},   
+            {0, 0, 0, 0},   
+            {0, 0, 0, 0}}
 
 	};
 
@@ -137,6 +234,18 @@ char o_block[4][4][4] =
  * 모든 블록의 모양을 표시*/
 
 char tetris_table[19][10];
+void GotoXY(int x, int y);
+void set_unblocking(int flag);
+int kbhit();
+void createBoard();
+void printBoard();
+void drawBlock(int blockNum, int rot, int posX, int posY);
+void eraseBlock(int blockNum, int rot, int posX, int posY);
+int isCollision(int blockNum, int rot, int posX, int posY);
+void fixBlockToBoard(int blockNum, int rot, int posX, int posY);
+void spawnNewBlock();
+void handleInput();
+int removeFullLines();
 
 void GotoXY(int x, int y) {
     printf("\033[%d;%dH", y, x);
@@ -151,6 +260,8 @@ void createBoard(){
 			if (y == 0)
 				board[y][x] = 0;
 				board[Board_Height - 1][x] = 1; // 바닥
+            if (y == 0)
+                board[y][x] = 1; // 천장
 			if (y > 0 && y < Board_Height - 1) 
 				if(x > 0 && x < Board_Width - 1)
 					board[y][x] = 0; // 빈 공간
@@ -160,28 +271,19 @@ void createBoard(){
 
 void printBoard() {
 	// 테트리스 판을 출력
-	for(int x = 1; x < 10; x++) {
-		GotoXY(BoardX + x * 2, BoardY+1);
-		printf("_");
-	}
 
 	for (int y = 0; y < Board_Height; y++) {
-		GotoXY(BoardX, BoardY + y);
-		if (board [y][0]==1){
-			printf("▨");
-		}
-		if (board[y][Board_Width - 1] == 1) {
-			GotoXY(BoardX + Board_Width * 2 - 2, BoardY + y);
-			printf("▨");
-		}
-	}
+        for (int x = 0; x < Board_Width; x++) {
+            GotoXY(BoardX + x * 2, BoardY + y);
 
-	for (int x = 0; x < Board_Width; x++) {
-		GotoXY (BoardX + x * 2, BoardY + Board_Height-1);
-		if(board[Board_Height - 1][x] == 1) {
-			printf("▨");
-		}
-	}
+            if (board[y][x] == 1) {
+                printf("■");
+            } else {
+                printf("  ");
+            }
+        }
+    }
+    fflush(stdout);
 }
 
 /* 게임 종료 때마다
@@ -235,40 +337,58 @@ int kbhit() {
     return select(STDIN_FILENO + 1, &fds, NULL, NULL, &tv);
 }
 int game_start(){
-	system("clear");
+    system("clear");
     printf("\033[?25l"); // 커서 숨기기
+    fflush(stdout);
+
     createBoard();
     printBoard();
 
     set_unblocking(1);
-
-    spawnNewBlock(); // 첫 블럭
+    srand(time(NULL));
+    spawnNewBlock(); // 첫 블럭 생성
 
     int tick = 0;
 
     while (1) {
-        handleInput();  // 키 입력 처리
+        handleInput();  // 실시간 키 입력
 
-        // 매 10틱마다 자동 낙하 (약 1초 주기)
-        if (tick % 10 == 0) {
+        // 매 0.5초마다 자동 낙하
+        if (tick % 5 == 0) {
             int newY = y + 1;
+
             if (!isCollision(block_number, block_state, x, newY)) {
                 eraseBlock(block_number, block_state, x, y);
                 y = newY;
                 drawBlock(block_number, block_state, x, y);
             } else {
-                // 바닥 또는 충돌 → 고정
+                // 바닥 또는 블럭과 충돌 → 즉시 고정
                 fixBlockToBoard(block_number, block_state, x, y);
-                spawnNewBlock(); // 다음 블럭
+                int lines = removeFullLines();
+                if (lines > 0) {
+                    printBoard();
+                    point += lines * 100; // 라인 제거 시 점수 추가
+                }
+                spawnNewBlock(); // 다음 블럭 생성
+
+                // 만약 새 블럭이 바로 충돌하면 게임 오버 처리
+                if (isCollision(block_number, block_state, x, y)) {
+                    GotoXY(0, BoardY + Board_Height + 2);
+                    printf("Game Over!\n");
+                    printf("최종 점수: %ld\n", point);
+                    fflush(stdout);
+                    break;
+                }
             }
         }
 
-        usleep(100000); // 0.1초 루프
+        usleep(100000); // 루프 틱 간격: 0.1초
         tick++;
     }
 
     set_unblocking(0);
     printf("\033[?25h"); // 커서 복구
+    fflush(stdout);
     return 0;
 }
 
@@ -294,6 +414,8 @@ void drawBlock(int blockNum, int rot, int posX, int posY) {
             }
         }
     }
+    GotoXY(0, BoardY + Board_Height + 1); // 커서를 보드 아래로 내림
+    fflush(stdout);
 }
 
 int isCollision(int blockNum, int rot, int posX, int posY) {
@@ -324,32 +446,6 @@ int isCollision(int blockNum, int rot, int posX, int posY) {
     }
     return 0;
 }
-
-void fixBlockToBoard(int blockNum, int rot, int posX, int posY) {
-    char (*block)[4][4] = NULL;
-
-    switch (blockNum) {
-        case I_BLOCK: block = i_block; break;
-        case T_BLOCK: block = t_block; break;
-        case S_BLOCK: block = s_block; break;
-        case Z_BLOCK: block = z_block; break;
-        case L_BLOCK: block = l_block; break;
-        case J_BLOCK: block = j_block; break;
-        case O_BLOCK: block = o_block; break;
-        default: return;
-    }
-
-    for (int i = 0; i < 4; i++) {
-        for (int j = 0; j < 4; j++) {
-            if (block[rot][i][j]) {
-                int bx = posX + j;
-                int by = posY + i;
-                if (bx >= 0 && bx < Board_Width && by >= 0 && by < Board_Height)
-                    board[by][bx] = 1;
-            }
-        }
-    }
-}
 void handleInput() {
     if (!kbhit()) return;
 
@@ -371,6 +467,23 @@ void handleInput() {
         case ROTATE1: case ROTATE2:
             newRot = (block_state + 1) % 4;
             break;
+        case DROP1: case DROP2:  // 'a'
+            while (!isCollision(block_number, block_state, x, y + 1)) {
+                eraseBlock(block_number, block_state, x, y);
+                y++;
+                drawBlock(block_number, block_state, x, y);
+                usleep(10000);  // 아주 짧은 시간 지연 (시각적 효과용)
+            }
+            return;
+        case QUIT1: case QUIT2:  // 'p'
+            system("clear");
+            GotoXY(0, BoardY + Board_Height + 2);
+            printf("게임을 종료합니다.\n");
+            printf("최종 점수: %ld\n", point);
+            set_unblocking(0);
+            printf("\033[?25h");
+            fflush(stdout);
+            exit(0);
         default:
             return;
     }
@@ -382,6 +495,7 @@ void handleInput() {
         block_state = newRot;
         drawBlock(block_number, block_state, x, y);   // 새 위치 그림
     }
+    
 }
 
 void eraseBlock(int blockNum, int rot, int posX, int posY) {
@@ -405,6 +519,8 @@ void eraseBlock(int blockNum, int rot, int posX, int posY) {
             }
         }
     }
+    GotoXY(0, BoardY + Board_Height + 1); // 커서를 보드 아래로 내림
+    fflush(stdout);
 }
 void fixBlockToBoard(int blockNum, int rot, int posX, int posY) {
     char (*block)[4][4] = NULL;
@@ -437,13 +553,46 @@ void spawnNewBlock() {
     block_state = 0;
     drawBlock(block_number, block_state, x, y);
 }
+int removeFullLines() {
+    int linesRemoved = 0;
+
+    for (int y = Board_Height - 2; y > 0; y--) { // 바닥 제외
+        int isFull = 1;
+        for (int x = 1; x < Board_Width - 1; x++) {
+            if (board[y][x] == 0) {
+                isFull = 0;
+                break;
+            }
+        }
+
+        if (isFull) {
+            linesRemoved++;
+
+            // 윗줄들을 아래로 복사
+            for (int row = y; row > 0; row--) {
+                for (int col = 1; col < Board_Width - 1; col++) {
+                    board[row][col] = board[row - 1][col];
+                }
+            }
+
+            // 가장 윗줄은 비움
+            for (int col = 1; col < Board_Width - 1; col++) {
+                board[0][col] = 0;
+            }
+            
+            y++; // 같은 줄을 다시 검사 (위에서 한 줄 내렸기 때문)
+        }
+    }
+
+    return linesRemoved;
+}
 
 /* 메뉴 표시*/
 int display_menu(void)
 {
 	// 
 	int menu = 0;
-
+    system("clear");
 	while(1)
 	{
 		GotoXY(4,3);
