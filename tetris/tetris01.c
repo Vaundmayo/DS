@@ -235,12 +235,208 @@ int kbhit() {
     return select(STDIN_FILENO + 1, &fds, NULL, NULL, &tv);
 }
 int game_start(){
-	system("cls"); // 화면 지우기
-	createBoard(); // 테트리스 판 생성
-	printBoard(); // 테트리스 판 출력
-	return 0;
+	system("clear");
+    printf("\033[?25l"); // 커서 숨기기
+    createBoard();
+    printBoard();
+
+    set_unblocking(1);
+
+    spawnNewBlock(); // 첫 블럭
+
+    int tick = 0;
+
+    while (1) {
+        handleInput();  // 키 입력 처리
+
+        // 매 10틱마다 자동 낙하 (약 1초 주기)
+        if (tick % 10 == 0) {
+            int newY = y + 1;
+            if (!isCollision(block_number, block_state, x, newY)) {
+                eraseBlock(block_number, block_state, x, y);
+                y = newY;
+                drawBlock(block_number, block_state, x, y);
+            } else {
+                // 바닥 또는 충돌 → 고정
+                fixBlockToBoard(block_number, block_state, x, y);
+                spawnNewBlock(); // 다음 블럭
+            }
+        }
+
+        usleep(100000); // 0.1초 루프
+        tick++;
+    }
+
+    set_unblocking(0);
+    printf("\033[?25h"); // 커서 복구
+    return 0;
 }
 
+void drawBlock(int blockNum, int rot, int posX, int posY) {
+    char (*block)[4][4] = NULL;
+
+    switch (blockNum) {
+        case I_BLOCK: block = i_block; break;
+        case T_BLOCK: block = t_block; break;
+        case S_BLOCK: block = s_block; break;
+        case Z_BLOCK: block = z_block; break;
+        case L_BLOCK: block = l_block; break;
+        case J_BLOCK: block = j_block; break;
+        case O_BLOCK: block = o_block; break;
+        default: return;
+    }
+
+    for (int i = 0; i < 4; i++) {  // y축
+        for (int j = 0; j < 4; j++) {  // x축
+            if (block[rot][i][j]) {
+                GotoXY(BoardX + (posX + j) * 2, BoardY + posY + i);
+                printf("■");
+            }
+        }
+    }
+}
+
+int isCollision(int blockNum, int rot, int posX, int posY) {
+    char (*block)[4][4] = NULL;
+
+    switch (blockNum) {
+        case I_BLOCK: block = i_block; break;
+        case T_BLOCK: block = t_block; break;
+        case S_BLOCK: block = s_block; break;
+        case Z_BLOCK: block = z_block; break;
+        case L_BLOCK: block = l_block; break;
+        case J_BLOCK: block = j_block; break;
+        case O_BLOCK: block = o_block; break;
+        default: return 1;
+    }
+
+    for (int i = 0; i < 4; i++) {
+        for (int j = 0; j < 4; j++) {
+            if (block[rot][i][j]) {
+                int bx = posX + j;
+                int by = posY + i;
+                if (bx < 0 || bx >= Board_Width || by < 0 || by >= Board_Height)
+                    return 1;
+                if (board[by][bx] == 1)
+                    return 1;
+            }
+        }
+    }
+    return 0;
+}
+
+void fixBlockToBoard(int blockNum, int rot, int posX, int posY) {
+    char (*block)[4][4] = NULL;
+
+    switch (blockNum) {
+        case I_BLOCK: block = i_block; break;
+        case T_BLOCK: block = t_block; break;
+        case S_BLOCK: block = s_block; break;
+        case Z_BLOCK: block = z_block; break;
+        case L_BLOCK: block = l_block; break;
+        case J_BLOCK: block = j_block; break;
+        case O_BLOCK: block = o_block; break;
+        default: return;
+    }
+
+    for (int i = 0; i < 4; i++) {
+        for (int j = 0; j < 4; j++) {
+            if (block[rot][i][j]) {
+                int bx = posX + j;
+                int by = posY + i;
+                if (bx >= 0 && bx < Board_Width && by >= 0 && by < Board_Height)
+                    board[by][bx] = 1;
+            }
+        }
+    }
+}
+void handleInput() {
+    if (!kbhit()) return;
+
+    int ch = getchar();
+    int newX = x;
+    int newY = y;
+    int newRot = block_state;
+
+    switch (ch) {
+        case LEFT1: case LEFT2:
+            newX = x - 1;
+            break;
+        case RIGHT1: case RIGHT2:
+            newX = x + 1;
+            break;
+        case DOWN1: case DOWN2:
+            newY = y + 1;
+            break;
+        case ROTATE1: case ROTATE2:
+            newRot = (block_state + 1) % 4;
+            break;
+        default:
+            return;
+    }
+
+    if (!isCollision(block_number, newRot, newX, newY)) {
+        eraseBlock(block_number, block_state, x, y);  // 이전 위치 지움
+        x = newX;
+        y = newY;
+        block_state = newRot;
+        drawBlock(block_number, block_state, x, y);   // 새 위치 그림
+    }
+}
+
+void eraseBlock(int blockNum, int rot, int posX, int posY) {
+    char (*block)[4][4] = NULL;
+    switch (blockNum) {
+        case I_BLOCK: block = i_block; break;
+        case T_BLOCK: block = t_block; break;
+        case S_BLOCK: block = s_block; break;
+        case Z_BLOCK: block = z_block; break;
+        case L_BLOCK: block = l_block; break;
+        case J_BLOCK: block = j_block; break;
+        case O_BLOCK: block = o_block; break;
+        default: return;
+    }
+
+    for (int i = 0; i < 4; i++) {
+        for (int j = 0; j < 4; j++) {
+            if (block[rot][i][j]) {
+                GotoXY(BoardX + (posX + j) * 2, BoardY + posY + i);
+                printf("  ");  // 지우기: 공백 2칸
+            }
+        }
+    }
+}
+void fixBlockToBoard(int blockNum, int rot, int posX, int posY) {
+    char (*block)[4][4] = NULL;
+    switch (blockNum) {
+        case I_BLOCK: block = i_block; break;
+        case T_BLOCK: block = t_block; break;
+        case S_BLOCK: block = s_block; break;
+        case Z_BLOCK: block = z_block; break;
+        case L_BLOCK: block = l_block; break;
+        case J_BLOCK: block = j_block; break;
+        case O_BLOCK: block = o_block; break;
+        default: return;
+    }
+
+    for (int i = 0; i < 4; i++) {
+        for (int j = 0; j < 4; j++) {
+            if (block[rot][i][j]) {
+                int bx = posX + j;
+                int by = posY + i;
+                if (bx >= 0 && bx < Board_Width && by >= 0 && by < Board_Height)
+                    board[by][bx] = 1;
+            }
+        }
+    }
+}
+void spawnNewBlock() {
+    x = 3;
+    y = 1;
+    block_number = rand() % 7;
+    block_state = 0;
+    drawBlock(block_number, block_state, x, y);
+}
 
 /* 메뉴 표시*/
 int display_menu(void)
