@@ -246,6 +246,7 @@ void fixBlockToBoard(int blockNum, int rot, int posX, int posY);
 void spawnNewBlock();
 void handleInput();
 int removeFullLines();
+void save_score(const char* name, long point);
 
 void GotoXY(int x, int y) {
     printf("\033[%d;%dH", y, x);
@@ -366,15 +367,6 @@ int game_start(){
                     point += lines * 100; // 라인 제거 시 점수 추가
                 }
                 spawnNewBlock(); // 다음 블럭 생성
-
-                // 만약 새 블럭이 바로 충돌하면 게임 오버 처리
-                if (isCollision(block_number, block_state, x, y)) {
-                    GotoXY(0, BoardY + Board_Height + 2);
-                    printf("Game Over!\n");
-                    printf("최종 점수: %ld\n", point);
-                    fflush(stdout);
-                    break;
-                }
             }
         }
 
@@ -553,11 +545,16 @@ void spawnNewBlock() {
         set_unblocking(0);
         printf("\033[?25h"); // 커서 보이기
         GotoXY(BoardX, BoardY + Board_Height + 2);
-        printf("GAME OVER! 총 점수: %ld\n", point);
-        exit(0); // 게임 종료
-    }
 
+        char name[50];
+        printf("\nGAME OVER! 점수: %ld\n", point);
+        printf("이름을 입력하세요: ");
+        scanf("%s", name);
+        save_score(name, point);
+        exit(0);
+}
     drawBlock(block_number, block_state, x, y);
+    
 }
 int removeFullLines() {
     int linesRemoved = 0;
@@ -591,6 +588,38 @@ int removeFullLines() {
     }
 
     return linesRemoved;
+}
+void save_score(const char* name, long point) {
+    FILE* fp = fopen("score.txt", "a");
+    if (!fp) return;
+
+    time_t t = time(NULL);
+    struct tm* tm_info = localtime(&t);
+
+    fprintf(fp, "%s %ld %04d-%02d-%02d %02d:%02d\n", name, point,
+            tm_info->tm_year + 1900, tm_info->tm_mon + 1, tm_info->tm_mday,
+            tm_info->tm_hour, tm_info->tm_min);
+
+    fclose(fp);
+}
+void print_score() {
+    FILE* fp = fopen("score.txt", "r");
+    if (!fp) {
+        printf("기록이 없습니다.\n");
+        return;
+    }
+
+    char name[50], date[20];
+    long score;
+    int year, month, day, hour, min;
+
+    printf("\n----- 기록 -----\n");
+    while (fscanf(fp, "%s %ld %d-%d-%d %d:%d",
+                  name, &score, &year, &month, &day, &hour, &min) != EOF) {
+        printf("이름: %s | 점수: %ld | 날짜: %04d-%02d-%02d %02d:%02d\n",
+               name, score, year, month, day, hour, min);
+    }
+    fclose(fp);
 }
 
 /* 메뉴 표시*/
@@ -646,7 +675,8 @@ int main(void)
 		}
 		else if(menu == 2)
 		{
-			//search_result();
+			print_score(); // 기록 출력
+            getchar(); getchar(); // 대기
 		}
 		else if(menu == 3)
 		{
