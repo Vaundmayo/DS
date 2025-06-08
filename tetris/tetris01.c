@@ -252,34 +252,30 @@ void GotoXY(int x, int y) {
     fflush(stdout);
 }
 
-void createBoard(){
-	for (int y =0; y < Board_Height; y++) {
-		board[y][0] = 1; // 왼쪽 벽
-		board[y][Board_Width - 1] = 1; // 오른쪽 벽
-		for(int x = 0; x < Board_Width; x++) {
-			if (y == 0)
-				board[y][x] = 0;
-				board[Board_Height - 1][x] = 1; // 바닥
-            if (y == 0)
-                board[y][x] = 1; // 천장
-			if (y > 0 && y < Board_Height - 1) 
-				if(x > 0 && x < Board_Width - 1)
-					board[y][x] = 0; // 빈 공간
-		}
-	}
+void createBoard() {
+    for (int y = 0; y < Board_Height; y++) {
+        for (int x = 0; x < Board_Width; x++) {
+            if (y == 0 || y == Board_Height - 1 || x == 0 || x == Board_Width - 1) {
+                board[y][x] = 1; // 천장, 바닥, 좌우 벽
+            } else {
+                board[y][x] = 0;
+            }
+        }
+    }
 }
-
 void printBoard() {
-	// 테트리스 판을 출력
-
-	for (int y = 0; y < Board_Height; y++) {
+    for (int y = 0; y < Board_Height; y++) {
         for (int x = 0; x < Board_Width; x++) {
             GotoXY(BoardX + x * 2, BoardY + y);
 
             if (board[y][x] == 1) {
-                printf("■");
+                // 벽인지 블럭인지 구분하려면: 가장자리 = 벽
+                if (y == 0 || y == Board_Height - 1 || x == 0 || x == Board_Width - 1)
+                    printf("▩");
+                else
+                    printf("■");
             } else {
-                printf("  ");
+                printf(" ");
             }
         }
     }
@@ -540,7 +536,7 @@ void fixBlockToBoard(int blockNum, int rot, int posX, int posY) {
             if (block[rot][i][j]) {
                 int bx = posX + j;
                 int by = posY + i;
-                if (bx >= 0 && bx < Board_Width && by >= 0 && by < Board_Height)
+                if (bx >= 1 && bx < Board_Width - 1 && by >= 1 && by < Board_Height - 1)
                     board[by][bx] = 1;
             }
         }
@@ -551,6 +547,16 @@ void spawnNewBlock() {
     y = 1;
     block_number = rand() % 7;
     block_state = 0;
+
+    if (isCollision(block_number, block_state, x, y)) {
+        game = GAME_END;
+        set_unblocking(0);
+        printf("\033[?25h"); // 커서 보이기
+        GotoXY(BoardX, BoardY + Board_Height + 2);
+        printf("GAME OVER! 총 점수: %ld\n", point);
+        exit(0); // 게임 종료
+    }
+
     drawBlock(block_number, block_state, x, y);
 }
 int removeFullLines() {
@@ -569,15 +575,15 @@ int removeFullLines() {
             linesRemoved++;
 
             // 윗줄들을 아래로 복사
-            for (int row = y; row > 0; row--) {
+            for (int row = y; row > 1; row--) {
                 for (int col = 1; col < Board_Width - 1; col++) {
                     board[row][col] = board[row - 1][col];
                 }
             }
 
-            // 가장 윗줄은 비움
+            // 가장 위 줄(1번째 줄)을 0으로 초기화 (0번째는 천장 또는 벽)
             for (int col = 1; col < Board_Width - 1; col++) {
-                board[0][col] = 0;
+                board[1][col] = 0;
             }
             
             y++; // 같은 줄을 다시 검사 (위에서 한 줄 내렸기 때문)
