@@ -54,6 +54,12 @@
 #define BoardX 4
 #define BoardY 3
 int board[Board_Height][Board_Width] = {0}; // 테트리스 판을 2차원 배열로 표현
+
+typedef struct {
+    char name[50];
+    long score;
+    int year, month, day, hour, min;
+} ScoreRecord; // 점수 기록 구조체
 /*
 
  * 블록 모양(I, T, S, Z, L, J, O) 
@@ -229,7 +235,7 @@ char o_block[4][4][4] =
  * 2차원 배열의 2차원 배열
  * 모든 블록의 모양을 표시
  *
- * 18*8 배열
+ * 19*10 배열
  * 모든 블록의 모양을 표시
  * 모든 블록의 모양을 표시*/
 
@@ -247,6 +253,16 @@ void spawnNewBlock();
 void handleInput();
 int removeFullLines();
 void save_score(const char* name, long point);
+void search_score();
+void print_score_sorted();
+void drawNextBlock(int blockNum);
+void printScore();
+
+void handle_exit(int sig) {
+    printf("\033[?25h"); // 커서 보이기
+    set_unblocking(0); // 터미널 모드 복구
+    exit(0);
+}
 
 void GotoXY(int x, int y) {
     printf("\033[%d;%dH", y, x);
@@ -256,8 +272,8 @@ void GotoXY(int x, int y) {
 void createBoard() {
     for (int y = 0; y < Board_Height; y++) {
         for (int x = 0; x < Board_Width; x++) {
-            if (y == 0 || y == Board_Height - 1 || x == 0 || x == Board_Width - 1) {
-                board[y][x] = 1; // 천장, 바닥, 좌우 벽
+            if (y == Board_Height - 1 || x == 0 || x == Board_Width - 1) {
+                board[y][x] = 1; // 바닥, 좌우 벽
             } else {
                 board[y][x] = 0;
             }
@@ -310,6 +326,8 @@ int best_point = 0; /* 최고 점수*/
 
 long point = 0; /* 현재 점수*/
 
+int quit_by_user = 0;
+
 
 int display_menu(void); /* 메뉴 표시*/
 
@@ -338,6 +356,10 @@ int game_start(){
     printf("\033[?25l"); // 커서 숨기기
     fflush(stdout);
 
+    srand(time(NULL));
+    next_block_number = rand() % 7;
+    spawnNewBlock();
+
     createBoard();
     printBoard();
 
@@ -349,7 +371,7 @@ int game_start(){
 
     while (1) {
         handleInput();  // 실시간 키 입력
-
+        if (game != GAME_START) break;
         // 매 0.5초마다 자동 낙하
         if (tick % 5 == 0) {
             int newY = y + 1;
@@ -365,19 +387,33 @@ int game_start(){
                 if (lines > 0) {
                     printBoard();
                     point += lines * 100; // 라인 제거 시 점수 추가
+                    printScore(); // 점수 출력
                 }
-                spawnNewBlock(); // 다음 블럭 생성
+                if (game == GAME_END) {
+                    break;
+                }
+                if (game == GAME_START) {
+                    spawnNewBlock();
+                }  
             }
         }
 
         usleep(100000); // 루프 틱 간격: 0.1초
         tick++;
     }
+    if(quit_by_user == 0) {
+        set_unblocking(0);
+        printf("\033[?25h"); // 커서 보이기
 
-    set_unblocking(0);
-    printf("\033[?25h"); // 커서 복구
-    fflush(stdout);
-    return 0;
+        char name[50];
+        GotoXY(0, BoardY + Board_Height + 2);
+        printf("\nGAME OVER! 점수: %ld\n", point);
+        printf("이름을 입력하세요: ");
+        scanf("%s", name);
+        save_score(name, point);
+    }
+    // 메뉴로 복귀
+    return 1;
 }
 
 void drawBlock(int blockNum, int rot, int posX, int posY) {
@@ -463,15 +499,28 @@ void handleInput() {
                 usleep(10000);  // 아주 짧은 시간 지연 (시각적 효과용)
             }
             return;
-        case QUIT1: case QUIT2:  // 'p'
-            system("clear");
-            GotoXY(0, BoardY + Board_Height + 2);
-            printf("게임을 종료합니다.\n");
-            printf("최종 점수: %ld\n", point);
-            set_unblocking(0);
-            printf("\033[?25h");
+        case QUIT1: case QUIT2:
+            game = GAME_END;
+            eraseBlock(block_number, block_state, x, y);
+            
+            set_unblocking(0);               // 터미널 모드 복구
+            printf("\033[?25h");             // 커서 다시 보이기
             fflush(stdout);
-            exit(0);
+
+            GotoXY(0, BoardY + Board_Height + 2);
+            printf("\n게임을 종료합니다.\n");
+
+            printf("이름을 입력하세요: ");
+            char name[50];
+            scanf("%s", name);
+
+            save_score(name, point);         // 점수 저장
+
+            printf("메뉴로 돌아갑니다...\n");
+            sleep(2);                         // 2초 대기
+            system("clear"); // 화면 지우기
+            quit_by_user = 1;
+            break; 
         default:
             return;
     }
@@ -535,31 +584,29 @@ void fixBlockToBoard(int blockNum, int rot, int posX, int posY) {
     }
 }
 void spawnNewBlock() {
-    x = 3;
+    if (game != GAME_START) return;
+    x = 4;
     y = 1;
-    block_number = rand() % 7;
+
+    block_number = next_block_number;
+    next_block_number = rand() % 7;
+
+    drawNextBlock(next_block_number);  // 다음 블럭 표시
+
     block_state = 0;
 
     if (isCollision(block_number, block_state, x, y)) {
         game = GAME_END;
-        set_unblocking(0);
-        printf("\033[?25h"); // 커서 보이기
-        GotoXY(BoardX, BoardY + Board_Height + 2);
+        return;
+    }
 
-        char name[50];
-        printf("\nGAME OVER! 점수: %ld\n", point);
-        printf("이름을 입력하세요: ");
-        scanf("%s", name);
-        save_score(name, point);
-        exit(0);
-}
     drawBlock(block_number, block_state, x, y);
-    
+    printScore();
 }
 int removeFullLines() {
     int linesRemoved = 0;
 
-    for (int y = Board_Height - 2; y > 0; y--) { // 바닥 제외
+    for (int y = Board_Height - 2; y >= 0; y--) { // 바닥 제외
         int isFull = 1;
         for (int x = 1; x < Board_Width - 1; x++) {
             if (board[y][x] == 0) {
@@ -601,31 +648,146 @@ void save_score(const char* name, long point) {
             tm_info->tm_hour, tm_info->tm_min);
 
     fclose(fp);
+    getchar();
 }
-void print_score() {
+void search_score() {
+    char search_name[50];
+    int found = 0;
     FILE* fp = fopen("score.txt", "r");
     if (!fp) {
-        printf("기록이 없습니다.\n");
+        printf("기록 파일이 없습니다.\n");
         return;
     }
 
-    char name[50], date[20];
+    printf("검색할 이름을 입력하세요: ");
+    scanf("%s", search_name);
+
+    char name[50];
     long score;
     int year, month, day, hour, min;
 
-    printf("\n----- 기록 -----\n");
+    printf("\n----- 검색 결과 -----\n");
     while (fscanf(fp, "%s %ld %d-%d-%d %d:%d",
                   name, &score, &year, &month, &day, &hour, &min) != EOF) {
-        printf("이름: %s | 점수: %ld | 날짜: %04d-%02d-%02d %02d:%02d\n",
-               name, score, year, month, day, hour, min);
+        if (strcmp(name, search_name) == 0) {
+            printf("이름: %s | 점수: %ld | 날짜: %04d-%02d-%02d %02d:%02d\n",
+                   name, score, year, month, day, hour, min);
+            found = 1;
+        }
     }
+    if (!found) {
+        printf("해당 이름의 기록이 없습니다.\n");
+    }
+
     fclose(fp);
 }
+int compare_scores(const void* a, const void* b) {
+    return ((ScoreRecord*)b)->score - ((ScoreRecord*)a)->score;
+}
+void print_score_sorted() {
+    FILE* fp = fopen("score.txt", "r");
+    if (!fp) {
+        printf("기록 파일이 없습니다.\n");
+        return;
+    }
+
+    ScoreRecord records[100];
+    int count = 0;
+
+    while (fscanf(fp, "%s %ld %d-%d-%d %d:%d",
+                  records[count].name,
+                  &records[count].score,
+                  &records[count].year,
+                  &records[count].month,
+                  &records[count].day,
+                  &records[count].hour,
+                  &records[count].min) == 7) {
+        count++;
+        if (count >= 20) break;  // 최대 20개 제한
+    }
+
+    fclose(fp);
+
+    // 정렬
+    qsort(records, count, sizeof(ScoreRecord), compare_scores);
+
+    // 출력
+    printf("\n===== 점수 랭킹 =====\n");
+    for (int i = 0; i < count; i++) {
+        printf("%2d위 | 이름: %-10s | 점수: %4ld | 날짜: %04d-%02d-%02d %02d:%02d\n",
+               i + 1,
+               records[i].name,
+               records[i].score,
+               records[i].year,
+               records[i].month,
+               records[i].day,
+               records[i].hour,
+               records[i].min);
+    }
+}
+void drawNextBlock(int blockNum) {
+    char (*block)[4][4] = NULL;
+
+    switch (blockNum) {
+        case I_BLOCK: block = i_block; break;
+        case T_BLOCK: block = t_block; break;
+        case S_BLOCK: block = s_block; break;
+        case Z_BLOCK: block = z_block; break;
+        case L_BLOCK: block = l_block; break;
+        case J_BLOCK: block = j_block; break;
+        case O_BLOCK: block = o_block; break;
+        default: return;
+    }
+
+    // 출력 기준 위치 조정
+    int baseX = BoardX + Board_Width * 2 + 2;
+    int baseY = BoardY + 2;
+
+    // 제목
+    GotoXY(baseX, baseY - 2);
+    printf("NEXT");
+
+    // 기존 영역 지우기
+    for (int i = 0; i < 4; i++) {
+        for (int j = 0; j < 4; j++) {
+            GotoXY(baseX + j * 2, baseY + i);
+            printf("  ");
+        }
+    }
+
+    // 새 블럭 출력
+    for (int i = 0; i < 4; i++) {
+        for (int j = 0; j < 4; j++) {
+            GotoXY(baseX + j * 2, baseY + i);
+            if (block[0][i][j])
+                printf("■");
+            else
+                printf("  ");
+        }
+    }
+    fflush(stdout);
+}
+
+void printScore() {
+    int scoreX = BoardX + Board_Width * 2 + 2;  // Next Block 오른쪽에
+    int scoreY = BoardY + 8;
+
+    GotoXY(scoreX, scoreY);
+    printf("SCORE");
+
+    GotoXY(scoreX, scoreY + 1);
+    printf("%6ld", point);  // 점수는 오른쪽 정렬
+    fflush(stdout);
+}
+
 
 /* 메뉴 표시*/
 int display_menu(void)
 {
 	// 
+    char input[10]; // 입력을 받을 문자열
+    // 메뉴 선택 변수
+    // 1: 게임 시작, 2: 기록 검색, 3: 기록 출력, 4: 종료
 	int menu = 0;
     system("clear");
 	while(1)
@@ -641,15 +803,19 @@ int display_menu(void)
 		printf("\n\t\t\t   4) QUIT");
 		printf("\n\t\t\t============================");
 		printf("\n\t\t\t\t\t SELECT : ");
-		scanf("%d",&menu);
-		if(menu < 1 || menu > 4)
-		{
-			continue;
-		}
-		else
-		{
-			return menu;
-		}
+		// 문자열로 입력 받기
+        fgets(input, sizeof(input), stdin);
+        
+        // 숫자인지 검사
+        if (sscanf(input, "%d", &menu) != 1 || menu < 1 || menu > 4) {
+            printf("\r잘못된 입력입니다. 1~4 사이의 숫자를 입력하세요.");
+            fflush(stdout);
+            sleep(1);
+            printf("\r\033[K"); // 현재 줄을 깨끗하게 지움
+            fflush(stdout);
+            continue;
+        }
+		return menu;
 	}
 	return 0;
 }
@@ -675,18 +841,29 @@ int main(void)
 		}
 		else if(menu == 2)
 		{
-			print_score(); // 기록 출력
-            getchar(); getchar(); // 대기
+			search_score(); // 이름으로 기록 검색
+            printf("\n엔터를 눌러 계속하세요...");
+            getchar(); getchar();
 		}
 		else if(menu == 3)
 		{
-			//print_result();
+			print_score_sorted(); // 기록 출력
+            printf("\n엔터를 눌러 계속하세요...");
+            getchar();
+            menu = 1; // 메뉴로 돌아가기
 		}
 		else if(menu == 4)
 		{
 			exit(0);
 		}
 	}
+    signal(SIGINT, handle_exit); // Ctrl+C로 종료 시 핸들러 호출
+    signal(SIGTERM, handle_exit); // 프로그램 종료 시 핸들러 호출
 
+    printf("\033[?25h"); // 커서 보이기
+    set_unblocking(0); // 터미널 모드 복구
+
+    printf("게임을 종료합니다.\n");
+    fflush(stdout);
 	return 0;
 }
