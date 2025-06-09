@@ -55,11 +55,33 @@
 #define BoardY 3
 int board[Board_Height][Board_Width] = {0}; // 테트리스 판을 2차원 배열로 표현
 
+#define RESET_COLOR  "\033[0m"
+#define RED_COLOR    "\033[31m"
+#define GREEN_COLOR  "\033[32m"
+#define YELLOW_COLOR "\033[33m"
+#define BLUE_COLOR   "\033[34m"
+#define MAGENTA_COLOR "\033[35m"
+#define CYAN_COLOR   "\033[36m"
+#define WHITE_COLOR  "\033[37m"
+#define GRAY_COLOR   "\033[90m"
+
 typedef struct {
     char name[50];
     long score;
     int year, month, day, hour, min;
 } ScoreRecord; // 점수 기록 구조체
+const char* getBlockColor(int blockNum) {
+    switch (blockNum) {
+        case I_BLOCK: return CYAN_COLOR;
+        case T_BLOCK: return MAGENTA_COLOR;
+        case S_BLOCK: return GREEN_COLOR;
+        case Z_BLOCK: return RED_COLOR;
+        case L_BLOCK: return YELLOW_COLOR;
+        case J_BLOCK: return BLUE_COLOR;
+        case O_BLOCK: return WHITE_COLOR;
+        default: return RESET_COLOR;
+    }
+}
 /*
 
  * 블록 모양(I, T, S, Z, L, J, O) 
@@ -286,13 +308,12 @@ void printBoard() {
             GotoXY(BoardX + x * 2, BoardY + y);
 
             if (board[y][x] == 1) {
-                // 벽인지 블럭인지 구분하려면: 가장자리 = 벽
                 if (y == 0 || y == Board_Height - 1 || x == 0 || x == Board_Width - 1)
-                    printf("▩");
+                    printf("\033[37m▩\033[0m"); // 하얀 벽
                 else
-                    printf("■");
-            } else {
-                printf(" ");
+                    printf("\033[90m■\033[0m"); // 고정된 블럭은 회색
+            }   else {
+                    printf(" ");
             }
         }
     }
@@ -430,17 +451,20 @@ void drawBlock(int blockNum, int rot, int posX, int posY) {
         default: return;
     }
 
+    const char* color = getBlockColor(blockNum);
+
     for (int i = 0; i < 4; i++) {  // y축
         for (int j = 0; j < 4; j++) {  // x축
             if (block[rot][i][j]) {
                 GotoXY(BoardX + (posX + j) * 2, BoardY + posY + i);
-                printf("■");
+                printf("%s■%s", color, RESET_COLOR);
             }
         }
     }
-    GotoXY(0, BoardY + Board_Height + 1); // 커서를 보드 아래로 내림
+    GotoXY(0, BoardY + Board_Height + 1);
     fflush(stdout);
 }
+
 
 int isCollision(int blockNum, int rot, int posX, int posY) {
     char (*block)[4][4] = NULL;
@@ -513,9 +537,9 @@ void handleInput() {
             printf("이름을 입력하세요: ");
             char name[50];
             scanf("%s", name);
-
+            getchar();
             save_score(name, point);         // 점수 저장
-
+            getchar();
             printf("메뉴로 돌아갑니다...\n");
             sleep(2);                         // 2초 대기
             system("clear"); // 화면 지우기
@@ -577,12 +601,17 @@ void fixBlockToBoard(int blockNum, int rot, int posX, int posY) {
             if (block[rot][i][j]) {
                 int bx = posX + j;
                 int by = posY + i;
-                if (bx >= 1 && bx < Board_Width - 1 && by >= 1 && by < Board_Height - 1)
+                if (bx >= 1 && bx < Board_Width - 1 && by >= 0 && by < Board_Height - 1) {
                     board[by][bx] = 1;
+                    GotoXY(BoardX + bx * 2, BoardY + by);
+                    printf("%s■%s", GRAY_COLOR, RESET_COLOR);
+                }
             }
         }
     }
+    fflush(stdout);
 }
+
 void spawnNewBlock() {
     if (game != GAME_START) return;
     x = 4;
@@ -637,19 +666,79 @@ int removeFullLines() {
     return linesRemoved;
 }
 void save_score(const char* name, long point) {
-    FILE* fp = fopen("score.txt", "a");
-    if (!fp) return;
+    FILE* fp = fopen("score.txt", "r");
+    struct result records[20];
+    int count = 0;
 
-    time_t t = time(NULL);
-    struct tm* tm_info = localtime(&t);
+    time_t now = time(NULL);
+    struct tm* t = localtime(&now);
 
-    fprintf(fp, "%s %ld %04d-%02d-%02d %02d:%02d\n", name, point,
-            tm_info->tm_year + 1900, tm_info->tm_mon + 1, tm_info->tm_mday,
-            tm_info->tm_hour, tm_info->tm_min);
+    // 기존 기록 불러오기
+    if (fp) {
+        while (fscanf(fp, "%s %ld %d-%d-%d %d:%d",
+                      records[count].name, &records[count].point,
+                      &records[count].year, &records[count].month, &records[count].day,
+                      &records[count].hour, &records[count].min) == 7) {
+            count++;
+            if (count >= 20) break;
+        }
+        fclose(fp);
+    }
 
+    // 새 점수보다 낮은 점수가 있으면 교체할 수 있도록 정렬 (낮은 점수 맨 뒤로)
+    if (count == 20) {
+        int minIdx = 0;
+        for (int i = 1; i < 20; i++) {
+            if (records[i].point < records[minIdx].point)
+                minIdx = i;
+        }
+
+        if (point > records[minIdx].point) {
+            // 교체
+            strcpy(records[minIdx].name, name);
+            records[minIdx].point = point;
+            records[minIdx].year = t->tm_year + 1900;
+            records[minIdx].month = t->tm_mon + 1;
+            records[minIdx].day = t->tm_mday;
+            records[minIdx].hour = t->tm_hour;
+            records[minIdx].min = t->tm_min;
+        } else {
+            return; // 기록되지 않음
+        }
+    } else {
+        // 20개 미만이면 새 기록 추가
+        strcpy(records[count].name, name);
+        records[count].point = point;
+        records[count].year = t->tm_year + 1900;
+        records[count].month = t->tm_mon + 1;
+        records[count].day = t->tm_mday;
+        records[count].hour = t->tm_hour;
+        records[count].min = t->tm_min;
+        count++;
+    }
+
+    // 점수 내림차순 정렬
+    for (int i = 0; i < count - 1; i++) {
+        for (int j = i + 1; j < count; j++) {
+            if (records[i].point < records[j].point) {
+                struct result temp = records[i];
+                records[i] = records[j];
+                records[j] = temp;
+            }
+        }
+    }
+
+    // 파일에 저장
+    fp = fopen("score.txt", "w");
+    for (int i = 0; i < count; i++) {
+        fprintf(fp, "%s %ld %04d-%02d-%02d %02d:%02d\n",
+                records[i].name, records[i].point,
+                records[i].year, records[i].month, records[i].day,
+                records[i].hour, records[i].min);
+    }
     fclose(fp);
-    getchar();
 }
+
 void search_score() {
     char search_name[50];
     int found = 0;
