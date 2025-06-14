@@ -3,26 +3,31 @@
 #include <string.h>
 #include <time.h>
 #include <signal.h>
-// OS별 헤더 파일
+
+/* OS별 헤더 파일 */
 #ifdef _WIN32
     #include <windows.h>
     #include <conio.h>
+    #define CURSOR_SHOW() { CONSOLE_CURSOR_INFO ci = {1, TRUE};  SetConsoleCursorInfo(GetStdHandle(STD_OUTPUT_HANDLE), &ci); }
+    #define CURSOR_HIDE() { CONSOLE_CURSOR_INFO ci = {1, FALSE}; SetConsoleCursorInfo(GetStdHandle(STD_OUTPUT_HANDLE), &ci); }
 #else
     #include <unistd.h>
     #include <termios.h>
     #include <sys/select.h>
     #include <sys/time.h>
     #include <sys/ioctl.h>
+    #define CURSOR_SHOW() printf("\033[?25h");
+    #define CURSOR_HIDE() printf("\033[?25l");
 #endif
 
-/* 타이머  */
+/* 타이머 */
 #define CCHAR 0
 #ifdef CTIME
 #undef CTIME
 #endif
 #define CTIME 1
 
-/* 왼쪽, 오른쪽, 아래, 회전  */
+/* 왼쪽, 오른쪽, 아래, 회전 */
 #define LEFT1 106 // 'j'
 #define LEFT2 74 //	 'J'
 #define RIGHT1 108 // 'l'
@@ -57,7 +62,7 @@
 #define BoardY 3
 int board[Board_Height][Board_Width] = {0}; // 테트리스 판을 2차원 배열로 표현
 
-// 색상 코드 (ANSI 이스케이프 시퀀스)
+/* 색상 코드 */
 #define RESET_COLOR  "\033[0m"
 #define RED_COLOR    "\033[31m"
 #define GREEN_COLOR  "\033[32m"
@@ -68,24 +73,23 @@ int board[Board_Height][Board_Width] = {0}; // 테트리스 판을 2차원 배�
 #define WHITE_COLOR  "\033[37m"
 #define GRAY_COLOR   "\033[90m"
 
-// Windows 콘솔 색상 설정
+/* Windows ANSI 적용 */
 #ifdef _WIN32
-void enableWindowsAnsiSupport() {
-    HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+void enableWindowsAnsi() {
+    HANDLE hout = GetStdHandle(STD_OUTPUT_HANDLE);
     DWORD dwMode = 0;
-    GetConsoleMode(hOut, &dwMode);
+    GetConsoleMode(hout, &dwMode);
     dwMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
-    SetConsoleMode(hOut, dwMode);
+    SetConsoleMode(hout, dwMode);
+    
+    // Windows UTF-8
+    SetConsoleCP(65001);
+    SetConsoleOutputCP(65001);
 }
 #endif
 
-typedef struct {
-    char name[50];
-    long score;
-    int year, month, day, hour, min;
-} ScoreRecord; // 점수 기록 구조체
 
-const char* getBlockColor(int blockNum) {
+const char* get_Color(int blockNum) {
     switch (blockNum) {
         case I_BLOCK: return CYAN_COLOR;
         case T_BLOCK: return MAGENTA_COLOR;
@@ -98,7 +102,20 @@ const char* getBlockColor(int blockNum) {
     }
 }
 
-// 블록 정의 (4x4x4 배열)
+/*
+
+ * 블록 모양(I, T, S, Z, L, J, O) 
+ * 4*4 배열의 2차원 배열
+ * 모든 블록의 모양을 표시
+ *
+ * 블록의 모양을 표시
+ * 왼쪽, 오른쪽, 아래, 회전 
+ * 4*4 배열의 2차원 배열
+ * 모든 블록의 모양을 표시
+ *
+ * 4*4*4 배열의 3차원 배열
+ */
+
 char i_block[4][4][4] = {
     {  // 첫 번째 회전 상태
         {1, 1, 1, 1}, {0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0} },
@@ -112,150 +129,68 @@ char i_block[4][4][4] = {
 
 char t_block[4][4][4] =
 	{
-			{{1, 0, 0, 0},   
-            {1, 1, 0, 0},   
-            {1, 0, 0, 0},   
-            {0, 0, 0, 0}},
-
-			{{1, 1, 1, 0},   
-            {0, 1, 0, 0},   
-            {0, 0, 0, 0},   
-            {0, 0, 0, 0}},
-
-			{{0, 1, 0, 0},   
-            {1, 1, 0, 0},   
-            {0, 1, 0, 0},   
-            {0, 0, 0, 0}},
-
-			{{0, 1, 0, 0},   
-            {1, 1, 1, 0},   
-            {0, 0, 0, 0},   
-            {0, 0, 0, 0}}
+		{{1, 0, 0, 0}, {1, 1, 0, 0}, {1, 0, 0, 0}, {0, 0, 0, 0}},
+		{{1, 1, 1, 0}, {0, 1, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}},
+		{{0, 1, 0, 0}, {1, 1, 0, 0}, {0, 1, 0, 0}, {0, 0, 0, 0}},
+		{{0, 1, 0, 0}, {1, 1, 1, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}}
 	};
 
 char s_block[4][4][4] =
 	{
-			{{1, 0, 0, 0},   
-            {1, 1, 0, 0},   
-            {0, 1, 0, 0},   
-            {0, 0, 0, 0}},
-
-			{{0, 1, 1, 0},   
-            {1, 1, 0, 0},   
-            {0, 0, 0, 0},   
-            {0, 0, 0, 0}},
-
-			{{1, 0, 0, 0},   
-            {1, 1, 0, 0},   
-            {0, 1, 0, 0},   
-            {0, 0, 0, 0}},
-
-			{{0, 1, 1, 0},   
-            {1, 1, 0, 0},   
-            {0, 0, 0, 0},   
-            {0, 0, 0, 0}}
-
+		{{1, 0, 0, 0}, {1, 1, 0, 0}, {0, 1, 0, 0}, {0, 0, 0, 0}},
+		{{0, 1, 1, 0}, {1, 1, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}},
+		{{1, 0, 0, 0}, {1, 1, 0, 0}, {0, 1, 0, 0}, {0, 0, 0, 0}},
+		{{0, 1, 1, 0}, {1, 1, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}}
 	};
 
 char z_block[4][4][4] =
 	{
-			{{0, 1, 0, 0},   
-            {1, 1, 0, 0},   
-            {1, 0, 0, 0},   
-            {0, 0, 0, 0}},
-
-			{{1, 1, 0, 0},   
-            {0, 1, 1, 0},   
-            {0, 0, 0, 0},   
-            {0, 0, 0, 0}},
-
-			{{0, 1, 0, 0},   
-            {1, 1, 0, 0},   
-            {1, 0, 0, 0},   
-            {0, 0, 0, 0}},
-
-			{{1, 1, 0, 0},   
-            {0, 1, 1, 0},   
-            {0, 0, 0, 0},   
-            {0, 0, 0, 0}}
-
+		{{0, 1, 0, 0}, {1, 1, 0, 0}, {1, 0, 0, 0}, {0, 0, 0, 0}},
+		{{1, 1, 0, 0}, {0, 1, 1, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}},
+		{{0, 1, 0, 0}, {1, 1, 0, 0}, {1, 0, 0, 0}, {0, 0, 0, 0}},
+		{{1, 1, 0, 0}, {0, 1, 1, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}}
 	};
 
 char l_block[4][4][4] =
 	{
-			{{1, 0, 0, 0},   
-            {1, 0, 0, 0},   
-            {1, 1, 0, 0},   
-            {0, 0, 0, 0}},
-
-			{{1, 1, 1, 0},   
-            {1, 0, 0, 0},   
-            {0, 0, 0, 0},   
-            {0, 0, 0, 0}},
-
-			{{1, 1, 0, 0},   
-            {0, 1, 0, 0},   
-            {0, 1, 0, 0},   
-            {0, 0, 0, 0}},
-
-			{{0, 0, 1, 0},   
-            {1, 1, 1, 0},   
-            {0, 0, 0, 0},   
-            {0, 0, 0, 0}}
-
+		{{1, 0, 0, 0}, {1, 0, 0, 0}, {1, 1, 0, 0}, {0, 0, 0, 0}},
+		{{1, 1, 1, 0}, {1, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}},
+		{{1, 1, 0, 0}, {0, 1, 0, 0}, {0, 1, 0, 0}, {0, 0, 0, 0}},
+		{{0, 0, 1, 0}, {1, 1, 1, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}}
 	};
 
 char j_block[4][4][4] =
 	{
-			{{0, 1, 0, 0},   
-            {0, 1, 0, 0},   
-            {1, 1, 0, 0},   
-            {0, 0, 0, 0}},
-
-			{{1, 0, 0, 0},   
-            {1, 1, 1, 0},   
-            {0, 0, 0, 0},   
-            {0, 0, 0, 0}},
-
-			{{1, 1, 0, 0},   
-            {1, 0, 0, 0},   
-            {1, 0, 0, 0},   
-            {0, 0, 0, 0}},
-
-			{{0, 0, 1, 0},   
-            {1, 1, 1, 0},   
-            {0, 0, 0, 0},   
-            {0, 0, 0, 0}}
+		{{0, 1, 0, 0}, {0, 1, 0, 0}, {1, 1, 0, 0}, {0, 0, 0, 0}},
+		{{1, 0, 0, 0}, {1, 1, 1, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}},
+		{{1, 1, 0, 0}, {1, 0, 0, 0}, {1, 0, 0, 0}, {0, 0, 0, 0}},
+		{{1, 1, 1, 0}, {0, 0, 1, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}}
 	};
 
 char o_block[4][4][4] =
 	{
-			{{1, 1, 0, 0},   
-            {1, 1, 0, 0},   
-            {0, 0, 0, 0},   
-            {0, 0, 0, 0}},
-
-			{{1, 1, 0, 0},   
-            {1, 1, 0, 0},   
-            {0, 0, 0, 0},   
-            {0, 0, 0, 0}},
-
-			{{1, 1, 0, 0},   
-            {1, 1, 0, 0},   
-            {0, 0, 0, 0},   
-            {0, 0, 0, 0}},
-
-			{{1, 1, 0, 0},   
-            {1, 1, 0, 0},   
-            {0, 0, 0, 0},   
-            {0, 0, 0, 0}}
-
+		{{1, 1, 0, 0}, {1, 1, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}},
+		{{1, 1, 0, 0}, {1, 1, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}},
+		{{1, 1, 0, 0}, {1, 1, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}},
+		{{1, 1, 0, 0}, {1, 1, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}}
 	};
+
+/* 테트리스 판을 2차원 배열로 표현
+ * 2차원 배열의 2차원 배열
+ * 모든 블록의 모양을 표시
+ *
+ * 19*10 배열
+ * 모든 블록의 모양을 표시
+ * 모든 블록의 모양을 표시*/
 
 char tetris_table[19][10];
 
-// 전역 변수
-static struct result
+/* 게임 종료 때때마다
+ * 이름과 득점수와 
+ * 날짜와 시간과 순위를 저장
+ * */
+
+typedef struct result
 {
 	char name[30];
 	long point;
@@ -265,41 +200,46 @@ static struct result
 	int hour;
 	int min;
 	int rank;
-}temp_result;
+} ScoreRecord;
 
-int block_number = 0;  /*블록 번호*/
-int next_block_number = 0; /*다음 블록 번호 */
-int block_state = 0; /*블록 상태, 왼쪽, 오른쪽, 아래, 회전  */
-int x = 3, y = 0; /*블록의 위치*/
-int game = GAME_END; /*게임 시작, 게임 종료*/
-int best_point = 0; /* 최고 점수*/
-long point = 0; /* 현재 점수*/
-int quit_by_user = 0;
+int block_number = 0;  /* 블록 번호 */
+int next_block_number = 0; /* 다음 블록 번호 */
+int block_state = 0; /* 블록 상태, 왼쪽, 오른쪽, 아래, 회전 */
+
+int x = 3, y = 0; /* 블록의 위치 */
+
+int game = GAME_END; /* 게임 시작, 게임 종료 */
+int best_point = 0; /* 최고 점수 */
+
+long point = 0; /* 현재 점수 */
+
+int quit_by_user = 0; /* 사용자가 게임을 종료했는지 여부 */
 
 // 함수 선언
 void GotoXY(int x, int y);
 void set_unblocking(int flag);
 int kbhit();
-void createBoard();
-void printBoard();
-void drawBlock(int blockNum, int rot, int posX, int posY);
-void eraseBlock(int blockNum, int rot, int posX, int posY);
-int isCollision(int blockNum, int rot, int posX, int posY);
-void fixBlockToBoard(int blockNum, int rot, int posX, int posY);
-void spawnNewBlock();
-void handleInput();
-int removeFullLines();
+void create_Board();
+void print_Board();
+void display_Block(int blockNum, int rot, int posX, int posY);
+void erase_Block(int blockNum, int rot, int posX, int posY);
+int check_bottom(int blockNum, int rot, int posX, int posY);
+void fix_Block(int blockNum, int rot, int posX, int posY);
+void spawn_NewBlock();
+void handle_Input();
+int remove_Lines();
 void save_score(const char* name, long point);
 void search_score();
 void print_score_sorted();
-void drawNextBlock(int blockNum);
-void printScore();
+void display_NextBlock(int blockNum);
+void print_Score();
 int display_menu(void);
-void clearScreen();
-void msleep(int milliseconds);
+void clear_Screen();
+void msleep(int msec);
+void exit_handle(int sig);
 
 // OS별 화면 지우기
-void clearScreen() {
+void clear_Screen() {
 #ifdef _WIN32
     system("cls");
 #else
@@ -308,11 +248,11 @@ void clearScreen() {
 }
 
 // OS별 밀리초 대기
-void msleep(int milliseconds) {
+void msleep(int msec) {
 #ifdef _WIN32
-    Sleep(milliseconds);
+    Sleep(msec);
 #else
-    usleep(milliseconds * 1000);
+    usleep(msec * 1000);
 #endif
 }
 
@@ -331,8 +271,8 @@ void GotoXY(int x, int y) {
 
 // 터미널 설정 변경
 void set_unblocking(int flag) {
+    (void)flag;
 #ifdef _WIN32
-    // Windows에서는 이미 비차단 모드
 #else
     struct termios term;
     tcgetattr(STDIN_FILENO, &term);
@@ -368,44 +308,46 @@ int getch() {
 }
 
 // 종료 핸들러
-void handle_exit(int sig) {
-#ifdef _WIN32
-    // Windows 커서 보이기
-    CONSOLE_CURSOR_INFO cursorInfo;
-    cursorInfo.dwSize = 100;
-    cursorInfo.bVisible = TRUE;
-    SetConsoleCursorInfo(GetStdHandle(STD_OUTPUT_HANDLE), &cursorInfo);
-#else
-    printf("\033[?25h"); // 커서 보이기
-#endif
+void exit_handle(int sig) {
+    (void)sig;
+    CURSOR_SHOW();
     set_unblocking(0); // 터미널 모드 복구
     exit(0);
 }
 
-void createBoard() {
+void create_Board() {
     for (int y = 0; y < Board_Height; y++) {
         for (int x = 0; x < Board_Width; x++) {
             if (y == Board_Height - 1 || x == 0 || x == Board_Width - 1) {
-                board[y][x] = 1; // 바닥, 좌우 벽
+                board[y][x] = 1; // 바닥, 좌우 벽 = 1
             } else {
-                board[y][x] = 0;
+                board[y][x] = 0; // 빈 공간 = 0
             }
         }
     }
 }
 
-void printBoard() {
+void print_Board() {
     for (int y = 0; y < Board_Height; y++) {
         for (int x = 0; x < Board_Width; x++) {
             GotoXY(BoardX + x * 2, BoardY + y);
 
-            if (board[y][x] == 1) {
-                if (y == 0 || y == Board_Height - 1 || x == 0 || x == Board_Width - 1)
-                    printf("\033[37m▩\033[0m"); // 하얀 벽
-                else
-                    printf("\033[90m■\033[0m"); // 고정된 블럭은 회색
-            }   else {
-                    printf("  ");
+            if (board[y][x] == 1) { // 벽과 바닥 출력
+                if (y == 0 || y == Board_Height - 1 || x == 0 || x == Board_Width - 1) {
+                #ifdef _WIN32
+                    printf("\033[37m##\033[0m");
+                #else
+                    printf("\033[37m▩\033[0m");
+                #endif
+                } else {
+                #ifdef _WIN32
+                    printf("\033[90m[]\033[0m");
+                #else
+                    printf("\033[90m■\033[0m");
+                #endif
+                }
+            } else {
+                printf("  ");
             }
         }
     }
@@ -413,59 +355,54 @@ void printBoard() {
 }
 
 int game_start(){
-    clearScreen();
+    clear_Screen();
     
 #ifdef _WIN32
-    // Windows 커서 숨기기
-    CONSOLE_CURSOR_INFO cursorInfo;
-    cursorInfo.dwSize = 100;
-    cursorInfo.bVisible = FALSE;
-    SetConsoleCursorInfo(GetStdHandle(STD_OUTPUT_HANDLE), &cursorInfo);
+    // 커서 숨기기
+    CURSOR_HIDE();
 #else
-    printf("\033[?25l"); // 커서 숨기기
+    CURSOR_HIDE();
     fflush(stdout);
 #endif
-
     srand((unsigned int)time(NULL));
     next_block_number = rand() % 7;
     
-    createBoard();
-    printBoard();
+    create_Board();  // 테트리스 판 생성, 출력
+    print_Board();
 
-    set_unblocking(1);
+    set_unblocking(1); // 터미널 비차단 모드 설정
     quit_by_user = 0;
     point = 0;
     
-    spawnNewBlock(); // 첫 블럭 생성
+    spawn_NewBlock(); // 첫 블럭 생성
 
     int tick = 0;
 
     while (1) {
-        handleInput();  // 실시간 키 입력
-        if (game != GAME_START) break;
+        handle_Input();  // 실시간 키 입력
+        if (game != GAME_START) break; // 게임 종료시 루프 탈출
         
-        // 매 0.5초마다 자동 낙하
-        if (tick % 5 == 0) {
+        // 매 0.4초마다 자동 낙하
+        if (tick % 4 == 0) {
             int newY = y + 1;
 
-            if (!isCollision(block_number, block_state, x, newY)) {
-                eraseBlock(block_number, block_state, x, y);
+            if (!check_bottom(block_number, block_state, x, newY)) {
+                erase_Block(block_number, block_state, x, y);
                 y = newY;
-                drawBlock(block_number, block_state, x, y);
+                display_Block(block_number, block_state, x, y);
             } else {
-                // 바닥 또는 블럭과 충돌 → 즉시 고정
-                fixBlockToBoard(block_number, block_state, x, y);
-                int lines = removeFullLines();
+                fix_Block(block_number, block_state, x, y); // 블럭 고정
+                int lines = remove_Lines(); // 라인 제거
                 if (lines > 0) {
-                    printBoard();
+                    print_Board();
                     point += lines * 100; // 라인 제거 시 점수 추가
-                    printScore(); // 점수 출력
+                    print_Score(); // 점수 출력
                 }
                 if (game == GAME_END) {
                     break;
                 }
                 if (game == GAME_START) {
-                    spawnNewBlock();
+                    spawn_NewBlock();
                 }  
             }
         }
@@ -476,28 +413,20 @@ int game_start(){
     
     if(quit_by_user == 0) {
         set_unblocking(0);
-#ifdef _WIN32
-        // Windows 커서 보이기
-        CONSOLE_CURSOR_INFO cursorInfo;
-        cursorInfo.dwSize = 100;
-        cursorInfo.bVisible = TRUE;
-        SetConsoleCursorInfo(GetStdHandle(STD_OUTPUT_HANDLE), &cursorInfo);
-#else
-        printf("\033[?25h"); // 커서 보이기
-#endif
+        CURSOR_SHOW();
 
         char name[50];
-        GotoXY(0, BoardY + Board_Height + 2);
+        GotoXY(BoardX, BoardY + Board_Height + 3);
         printf("\nGAME OVER! 점수: %ld\n", point);
         printf("이름을 입력하세요: ");
         scanf("%s", name);
         save_score(name, point);
+        getchar();
     }
-    // 메뉴로 복귀
     return 1;
 }
-
-void drawBlock(int blockNum, int rot, int posX, int posY) {
+/* 블록 그리기 */
+void display_Block(int blockNum, int rot, int posX, int posY) {
     char (*block)[4][4] = NULL;
 
     switch (blockNum) {
@@ -511,21 +440,25 @@ void drawBlock(int blockNum, int rot, int posX, int posY) {
         default: return;
     }
 
-    const char* color = getBlockColor(blockNum);
+    const char* color = get_Color(blockNum);
 
     for (int i = 0; i < 4; i++) {  // y축
         for (int j = 0; j < 4; j++) {  // x축
             if (block[rot][i][j]) {
                 GotoXY(BoardX + (posX + j) * 2, BoardY + posY + i);
+            #ifdef _WIN32
+                printf("%s[]\033[0m", color);
+            #else
                 printf("%s■%s", color, RESET_COLOR);
+            #endif
             }
         }
     }
     GotoXY(0, BoardY + Board_Height + 1);
     fflush(stdout);
 }
-
-void eraseBlock(int blockNum, int rot, int posX, int posY) {
+/* 블록 지우기 */
+void erase_Block(int blockNum, int rot, int posX, int posY) {
     char (*block)[4][4] = NULL;
     switch (blockNum) {
         case I_BLOCK: block = i_block; break;
@@ -549,8 +482,8 @@ void eraseBlock(int blockNum, int rot, int posX, int posY) {
     GotoXY(0, BoardY + Board_Height + 1); // 커서를 보드 아래로 내림
     fflush(stdout);
 }
-
-int isCollision(int blockNum, int rot, int posX, int posY) {
+/* 충돌 검사 */
+int check_bottom(int blockNum, int rot, int posX, int posY) {
     char (*block)[4][4] = NULL;
 
     switch (blockNum) {
@@ -578,8 +511,8 @@ int isCollision(int blockNum, int rot, int posX, int posY) {
     }
     return 0;
 }
-
-void fixBlockToBoard(int blockNum, int rot, int posX, int posY) {
+/* 블록 고정 */
+void fix_Block(int blockNum, int rot, int posX, int posY) {
     char (*block)[4][4] = NULL;
     switch (blockNum) {
         case I_BLOCK: block = i_block; break;
@@ -600,15 +533,19 @@ void fixBlockToBoard(int blockNum, int rot, int posX, int posY) {
                 if (bx >= 1 && bx < Board_Width - 1 && by >= 0 && by < Board_Height - 1) {
                     board[by][bx] = 1;
                     GotoXY(BoardX + bx * 2, BoardY + by);
+                #ifdef _WIN32
+                    printf("%s[]\033[0m", GRAY_COLOR);
+                #else
                     printf("%s■%s", GRAY_COLOR, RESET_COLOR);
+                #endif
                 }
             }
         }
     }
     fflush(stdout);
 }
-
-void handleInput() {
+/* 키 입력 */
+void handle_Input() {
     if (!kbhit()) return;
 
     int ch = getch();
@@ -617,43 +554,35 @@ void handleInput() {
     int newRot = block_state;
 
     switch (ch) {
-        case LEFT1: case LEFT2:
+        case LEFT1: case LEFT2: // 'j'
             newX = x - 1;
             break;
-        case RIGHT1: case RIGHT2:
+        case RIGHT1: case RIGHT2:   // 'l'
             newX = x + 1;
             break;
-        case DOWN1: case DOWN2:
+        case DOWN1: case DOWN2: // 'k'
             newY = y + 1;
             break;
-        case ROTATE1: case ROTATE2:
+        case ROTATE1: case ROTATE2: // 'i'
             newRot = (block_state + 1) % 4;
             break;
         case DROP1: case DROP2:  // 'a'
-            while (!isCollision(block_number, block_state, x, y + 1)) {
-                eraseBlock(block_number, block_state, x, y);
+            while (!check_bottom(block_number, block_state, x, y + 1)) {
+                erase_Block(block_number, block_state, x, y);
                 y++;
-                drawBlock(block_number, block_state, x, y);
-                msleep(10);  // 아주 짧은 시간 지연 (시각적 효과용)
+                display_Block(block_number, block_state, x, y);
+                msleep(10);  // 아주 짧은 시간 지연
             }
             return;
-        case QUIT1: case QUIT2:
+        case QUIT1: case QUIT2: // 'p'
             game = GAME_END;
-            eraseBlock(block_number, block_state, x, y);
+            erase_Block(block_number, block_state, x, y);
             
-            set_unblocking(0);               // 터미널 모드 복구
-#ifdef _WIN32
-            // Windows 커서 보이기
-            CONSOLE_CURSOR_INFO cursorInfo;
-            cursorInfo.dwSize = 100;
-            cursorInfo.bVisible = TRUE;
-            SetConsoleCursorInfo(GetStdHandle(STD_OUTPUT_HANDLE), &cursorInfo);
-#else
-            printf("\033[?25h");             // 커서 다시 보이기
-#endif
+            set_unblocking(0);      // 터미널 모드 복구
+            CURSOR_SHOW();
             fflush(stdout);
 
-            GotoXY(0, BoardY + Board_Height + 2);
+            GotoXY(BoardX, BoardY + Board_Height + 3);
             printf("\n게임을 종료합니다.\n");
 
             printf("이름을 입력하세요: ");
@@ -661,46 +590,47 @@ void handleInput() {
             scanf("%s", name);
             save_score(name, point);         // 점수 저장
             getchar();
+
             printf("메뉴로 돌아갑니다...\n");
-            msleep(2000);                    // 2초 대기
-            clearScreen();                   // 화면 지우기
-            quit_by_user = 1;
+            msleep(1000);                    // 1초 대기
+            clear_Screen();                   // 화면 지우기
+            quit_by_user = 1;           // 사용자가 종료했음을 표시
             break; 
         default:
             return;
     }
 
-    if (!isCollision(block_number, newRot, newX, newY)) {
-        eraseBlock(block_number, block_state, x, y);  // 이전 위치 지움
+    if (!check_bottom(block_number, newRot, newX, newY)) {
+        erase_Block(block_number, block_state, x, y);  // 이전 위치 지움
         x = newX;
         y = newY;
         block_state = newRot;
-        drawBlock(block_number, block_state, x, y);   // 새 위치 그림
+        display_Block(block_number, block_state, x, y);   // 새 위치 그림
     }
 }
-
-void spawnNewBlock() {
+/* 새 블록 스폰 */
+void spawn_NewBlock() {
     if (game != GAME_START) return;
     x = 4;
-    y = 1;
+    y = 0;
 
     block_number = next_block_number;
     next_block_number = rand() % 7;
 
-    drawNextBlock(next_block_number);  // 다음 블럭 표시
+    display_NextBlock(next_block_number);  // 다음 블럭 ui 표시
 
     block_state = 0;
 
-    if (isCollision(block_number, block_state, x, y)) {
+    if (check_bottom(block_number, block_state, x, y)) {
         game = GAME_END;
         return;
     }
 
-    drawBlock(block_number, block_state, x, y);
-    printScore();
+    display_Block(block_number, block_state, x, y);
+    print_Score();
 }
-
-int removeFullLines() {
+/* 라인 제거 */
+int remove_Lines() {
     int linesRemoved = 0;
 
     for (int y = Board_Height - 2; y >= 0; y--) { // 바닥 제외
@@ -722,18 +652,18 @@ int removeFullLines() {
                 }
             }
 
-            // 가장 위 줄(1번째 줄)을 0으로 초기화 (0번째는 천장 또는 벽)
+            // 가장 윗 줄을 0으로 초기화
             for (int col = 1; col < Board_Width - 1; col++) {
                 board[1][col] = 0;
             }
             
-            y++; // 같은 줄을 다시 검사 (위에서 한 줄 내렸기 때문)
+            y++; // 같은 줄 다시 검사
         }
     }
 
     return linesRemoved;
 }
-
+/* 점수 저장 */
 void save_score(const char* name, long point) {
     FILE* fp = fopen("score.txt", "r");
     struct result records[20];
@@ -754,7 +684,7 @@ void save_score(const char* name, long point) {
         fclose(fp);
     }
 
-    // 새 점수보다 낮은 점수가 있으면 교체할 수 있도록 정렬
+    // 최소 점수 인덱스 찾기
     if (count == 20) {
         int minIdx = 0;
         for (int i = 1; i < 20; i++) {
@@ -809,7 +739,7 @@ void save_score(const char* name, long point) {
         fclose(fp);
     }
 }
-
+// 점수 검색 //
 void search_score() {
     char search_name[50];
     int found = 0;
@@ -841,11 +771,11 @@ void search_score() {
 
     fclose(fp);
 }
-
+// 점수 비교 //
 int compare_scores(const void* a, const void* b) {
-    return (int)(((ScoreRecord*)b)->score - ((ScoreRecord*)a)->score);
+    return (int)(((ScoreRecord*)b)->point - ((ScoreRecord*)a)->point);
 }
-
+// 점수 정렬 및 출력 //
 void print_score_sorted() {
     FILE* fp = fopen("score.txt", "r");
     if (!fp) {
@@ -858,7 +788,7 @@ void print_score_sorted() {
 
     while (fscanf(fp, "%s %ld %d-%d-%d %d:%d",
                   records[count].name,
-                  &records[count].score,
+                  &records[count].point,
                   &records[count].year,
                   &records[count].month,
                   &records[count].day,
@@ -879,7 +809,7 @@ void print_score_sorted() {
         printf("%2d위 | 이름: %-10s | 점수: %4ld | 날짜: %04d-%02d-%02d %02d:%02d\n",
                i + 1,
                records[i].name,
-               records[i].score,
+               records[i].point,
                records[i].year,
                records[i].month,
                records[i].day,
@@ -887,8 +817,8 @@ void print_score_sorted() {
                records[i].min);
     }
 }
-
-void drawNextBlock(int blockNum) {
+/* 다음 블록 UI 표시 */
+void display_NextBlock(int blockNum) {
     char (*block)[4][4] = NULL;
 
     switch (blockNum) {
@@ -922,16 +852,22 @@ void drawNextBlock(int blockNum) {
     for (int i = 0; i < 4; i++) {
         for (int j = 0; j < 4; j++) {
             GotoXY(baseX + j * 2, baseY + i);
-            if (block[0][i][j])
-                printf("■");
+           if (block[0][i][j]) {
+                const char* color = get_Color(blockNum);
+            #ifdef _WIN32
+                printf("%s[]%s", color, RESET_COLOR);  // 색상 적용 후 리셋
+            #else
+                printf("%s■%s", color, RESET_COLOR);
+            #endif
+}
             else
                 printf("  ");
         }
     }
     fflush(stdout);
 }
-
-void printScore() {
+/* 점수 출력 */
+void print_Score() {
     int scoreX = BoardX + Board_Width * 2 + 2;  // Next Block 오른쪽에
     int scoreY = BoardY + 8;
 
@@ -946,9 +882,9 @@ void printScore() {
 /* 메뉴 표시*/
 int display_menu(void)
 {
-    char input[10]; // 입력을 받을 문자열
+    char input[10]; // 숫자 판단을 위한한 문자열
     int menu = 0;
-    clearScreen();
+    clear_Screen();
     
     while(1)
     {
@@ -972,7 +908,7 @@ int display_menu(void)
             printf("\r잘못된 입력입니다. 1~4 사이의 숫자를 입력하세요.");
             fflush(stdout);
             msleep(1000);
-            printf("\r\033[K"); // 현재 줄을 깨끗하게 지움
+            printf("\r\033[K"); // 현재 줄을 지움
             fflush(stdout);
             continue;
         }
@@ -982,17 +918,20 @@ int display_menu(void)
 }
 
 /// 테트리스 게임 메인 함수
+/// 메뉴를 표시하고 사용자의 선택에 따라 게임을 시작하거나 결과를 검색하거나 종료합니다.
+/// @param  
+/// @return 
 int main(void)
 {
 #ifdef _WIN32
-    // Windows에서 ANSI 색상 코드 지원 활성화
-    enableWindowsAnsiSupport();
-    // Windows에서 시그널 핸들러 설정
-    signal(SIGINT, handle_exit);
+    // Windows ANSI 활성화
+    enableWindowsAnsi();
+    // Windows 시그널 핸들러 설정
+    signal(SIGINT, exit_handle);
 #else
-    // Unix/Linux/macOS에서 시그널 핸들러 설정
-    signal(SIGINT, handle_exit);
-    signal(SIGTERM, handle_exit);
+    // Unix/Linux/macOS 시그널 핸들러 설정
+    signal(SIGINT, exit_handle);
+    signal(SIGTERM, exit_handle);
 #endif
 
     int menu = 1;
@@ -1026,15 +965,7 @@ int main(void)
         }
     }
 
-#ifdef _WIN32
-    // Windows 커서 보이기
-    CONSOLE_CURSOR_INFO cursorInfo;
-    cursorInfo.dwSize = 100;
-    cursorInfo.bVisible = TRUE;
-    SetConsoleCursorInfo(GetStdHandle(STD_OUTPUT_HANDLE), &cursorInfo);
-#else
-    printf("\033[?25h"); // 커서 보이기
-#endif
+    CURSOR_SHOW();
     
     set_unblocking(0); // 터미널 모드 복구
 
